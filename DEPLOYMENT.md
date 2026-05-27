@@ -126,72 +126,93 @@ sequenceDiagram
 
 ---
 
-### 🟣 Phase 3: Deploy Backend API Server (Render)
+## 🚀 Choice A: High-Performance Deployment (Vercel + Vercel) — RECOMMENDED ⚡
+This path hosts both the Express API backend and the React Vite frontend on Vercel. Since Vercel provides instant serverless execution, there is **zero cold-start spin-down delay** (unlike Render's free tier which takes 50+ seconds to wake up).
 
-Render automatically handles hosting, building, and running Node.js projects directly from GitHub.
+```mermaid
+graph TD
+    User([User's Browser]) -->|HTTPS Requests| Frontend[React Vite Frontend on Vercel]
+    Frontend -->|API Queries /auth, /vault| Backend[Express API on Vercel Serverless]
+    Backend -->|Data Connection| Database[(MongoDB Atlas Cloud DB)]
+    
+    style User fill:#a78bfa,stroke:#7c3aed,stroke-width:2px,color:#fff
+    style Frontend fill:#000,stroke:#333,stroke-width:2px,color:#fff
+    style Backend fill:#000,stroke:#333,stroke-width:2px,color:#fff
+    style Database fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
+```
 
-#### Step 3.1: Create a New Web Service
-1. Log in to your **Render** dashboard.
-2. Click **New +** and select **Web Service**.
-3. Link your GitHub account and choose your `lifepause` repository.
+### 🟣 Step A1: Deploy Backend API Server to Vercel
+Vercel automatically detects the `backend/vercel.json` file in your repository and configures your Express app as a Serverless Function.
 
-#### Step 3.2: Configure Build Settings
-Fill in the deployment details exactly as follows:
-
-| Field | Configuration Value | Description |
-| :--- | :--- | :--- |
-| **Name** | `lifepause-backend` | Name of your Render Web Service |
-| **Region** | Select region closest to your DB | Minimizes database connection latency |
-| **Branch** | `main` | Production deployment source branch |
-| **Root Directory** | `backend` | **CRITICAL:** Tells Render to execute inside the `backend` folder |
-| **Runtime** | `Node` | Runtime engine |
-| **Build Command** | `npm install` | Installs dependencies |
-| **Start Command** | `npm start` | Launches server via `node server.js` |
-| **Instance Type** | `Free` | Zero-cost development slot |
-
-#### Step 3.3: Set Environment Variables
-Scroll down and click **Advanced** -> **Add Environment Variable**. Add the following:
-
-| Key | Value | Description |
-| :--- | :--- | :--- |
-| `NODE_ENV` | `production` | Sets server to run in production mode |
-| `MONGO_URI` | *Your copied MongoDB Atlas string from Phase 2* | Connection to cloud database |
-| `JWT_SECRET` | *Generates a random key e.g. `lp_prod_secret_9988_#$@!`* | Cryptographic salt for authentication tokens |
-
-> [!TIP]
-> Once you click **Create Web Service**, Render will start building your backend. The first build can take 2-4 minutes as Render sets up the environment. Watch the console logs for the message: `Server running in development mode on port 10000` (Render overrides the port variable dynamically) and `MongoDB Connected`.
-> Copy your live backend service URL (e.g., `https://lifepause-backend.onrender.com`).
+1. Go to the [Vercel Dashboard](https://vercel.com/) and click **Add New** -> **Project**.
+2. Import your `lifepause` GitHub repository.
+3. Configure the following project settings:
+   - **Project Name**: `lifepause-backend`
+   - **Framework Preset**: Select **Other** (do NOT select Node.js; Vercel will automatically read the `vercel.json` file).
+   - **Root Directory**: Click **Edit** and select **`backend`**.
+4. Scroll down and open **Environment Variables**. Add these keys:
+   - `MONGO_URI` = *Your copied MongoDB Atlas string from Phase 2*
+   - `JWT_SECRET` = *A strong random string (e.g. `lp_prod_secret_9988_#$@!`) to secure tokens*
+5. Click **Deploy**. Vercel will compile and provision your Express backend in seconds!
+6. Once deployed, copy your live backend service URL (e.g., `https://lifepause-backend.vercel.app`).
 
 ---
 
-### ⚡ Phase 4: Deploy React Frontend Client (Netlify)
+### ⚡ Step A2: Deploy React Frontend Client to Vercel
+Next, deploy the React frontend and connect it to your live Vercel backend.
 
-Since a static React build doesn't require server-side execution, hosting it on Netlify's high-speed CDN guarantees blistering load times.
+1. Go back to your [Vercel Dashboard](https://vercel.com/) and click **Add New** -> **Project**.
+2. Import your `lifepause` GitHub repository again.
+3. Configure the following project settings:
+   - **Project Name**: `lifepause-frontend`
+   - **Framework Preset**: Select **Vite** (Vercel will auto-detect this).
+   - **Root Directory**: Click **Edit** and select **`frontend`**.
+4. Scroll down and open **Environment Variables**. Add this key:
+   - `VITE_API_URL` = *Your Vercel backend URL, appending `/api` at the end* (e.g., `https://lifepause-backend.vercel.app/api`).
+5. Click **Deploy**. Vercel will build the Vite assets and distribute them on its global edge CDN.
+6. Your live site is now ready! You will receive a unique URL (e.g., `https://lifepause-frontend.vercel.app`).
 
-#### Step 4.1: Import from Git
+---
+
+## 🚀 Choice B: Classic Deployment (Render + Netlify) — ALTERNATIVE 🟣
+This is the classic hosting path using Render for the Express server and Netlify for the frontend client.
+
+### 🟣 Step B1: Deploy Backend API Server to Render
+Render automatically handles hosting, building, and running Node.js projects directly from GitHub.
+
+1. Log in to your **Render** dashboard.
+2. Click **New +** and select **Web Service**.
+3. Link your GitHub account and choose your `lifepause` repository.
+4. Fill in the deployment details exactly as follows:
+   - **Name**: `lifepause-backend`
+   - **Region**: Select a region closest to your MongoDB cluster
+   - **Branch**: `main`
+   - **Root Directory**: `backend` *(CRITICAL: Runs commands in the backend folder)*
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Instance Type**: `Free`
+5. Click **Advanced** -> **Add Environment Variable** and add the following:
+   - `NODE_ENV` = `production`
+   - `MONGO_URI` = *Your MongoDB Atlas connection string*
+   - `JWT_SECRET` = *Your cryptographic JWT salt*
+6. Click **Create Web Service**. Wait 2-4 minutes for the deployment to finish, then copy your live Render URL (e.g., `https://lifepause-backend.onrender.com`).
+
+---
+
+### ⚡ Step B2: Deploy React Frontend Client to Netlify
+Hosting static React compilations on Netlify guarantees blazing-fast assets distribution.
+
 1. Log in to the **Netlify** Dashboard.
 2. Click **Add new site** -> **Import an existing project**.
 3. Select **GitHub** as the provider and choose your `lifepause` repository.
-
-#### Step 4.2: Build Settings Configuration
-Netlify automatically looks for build variables, but since this is a monorepo setup, you must target the `frontend` sub-directory:
-
-| Field | Configuration Value | Description |
-| :--- | :--- | :--- |
-| **Base directory** | `frontend` | **CRITICAL:** Directs Netlify build commands inside the `frontend` folder |
-| **Build command** | `npm run build` | Compiles Vite React code into static assets |
-| **Publish directory** | `dist` | The compilation output folder (sub-directory under base) |
-
-#### Step 4.3: Add Environment Variables
-Before deploying, click **Add Environment Variables** (or set them under Site Settings later):
-
-| Key | Value | Description |
-| :--- | :--- | :--- |
-| `VITE_API_URL` | `https://your-backend.onrender.com/api` | Point this to your Render service live URL, **appending `/api` at the end** |
-
-#### Step 4.4: Deploy Site
-1. Click **Deploy lifepause**.
-2. Netlify will compile your Vite application. Once completed, your site is live! You will receive a unique Netlify subdomain (e.g., `https://your-custom-site.netlify.app`).
+4. Configure the build parameters exactly as follows:
+   - **Base directory**: `frontend` *(CRITICAL: Tells Netlify to build from the frontend folder)*
+   - **Build command**: `npm run build`
+   - **Publish directory**: `dist`
+5. Click **Add Environment Variables** and add:
+   - `VITE_API_URL` = *Your Render service live URL, appending `/api` at the end* (e.g., `https://lifepause-backend.onrender.com/api`).
+6. Click **Deploy lifepause**. Once compiled, your static site is live on a Netlify subdomain!
 
 ---
 

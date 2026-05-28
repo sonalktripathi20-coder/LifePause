@@ -17,7 +17,7 @@ export const Login = () => {
     if (res.success) {
       navigate('/dashboard');
     } else {
-      setError(res.message || 'Invalid credentials. Check if backend is active or use mock login (demo@lifepause.in / password).');
+      setError(res.message || 'Invalid email or password. Please check your credentials.');
     }
   };
 

@@ -8,11 +8,110 @@
   }
 }
 
-/* Custom Premium Utilities */
+/* 3D Core Utilities */
+.perspective-1000 {
+  perspective: 1200px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* 3D Floating Animations */
+@keyframes float3D-slow {
+  0%, 100% {
+    transform: translateY(0px) rotate3d(1, 1, 1, 0deg) translateZ(0px);
+  }
+  50% {
+    transform: translateY(-20px) rotate3d(1, 1, 1, 12deg) translateZ(30px);
+  }
+}
+
+@keyframes float3D-medium {
+  0%, 100% {
+    transform: translateY(0px) rotate3d(1, -1, 1, 0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate3d(1, -1, 1, -15deg);
+  }
+}
+
+@keyframes spin3D-slow {
+  0% {
+    transform: rotateX(20deg) rotateY(0deg);
+  }
+  100% {
+    transform: rotateX(20deg) rotateY(360deg);
+  }
+}
+
+.animate-float-3d-slow {
+  animation: float3D-slow 8s ease-in-out infinite;
+}
+
+.animate-float-3d-medium {
+  animation: float3D-medium 6s ease-in-out infinite;
+}
+
+.animate-spin-3d-slow {
+  animation: spin3D-slow 20s linear infinite;
+}
+
+/* Interactive 3D Cards */
+.card-3d {
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s ease;
+  transform: translateZ(0px);
+}
+
+.card-3d:hover {
+  transform: translateZ(30px) rotateX(4deg) rotateY(-4deg);
+  box-shadow: 
+    -10px 10px 30px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(99, 102, 241, 0.15);
+}
+
+/* Extruded Isometric Depth Borders */
+.iso-depth-accent {
+  box-shadow: 
+    3px 3px 0px rgba(99, 102, 241, 0.6),
+    6px 6px 0px rgba(99, 102, 241, 0.3),
+    9px 9px 15px rgba(0, 0, 0, 0.6);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.iso-depth-accent:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 
+    6px 6px 0px rgba(99, 102, 241, 0.8),
+    12px 12px 0px rgba(99, 102, 241, 0.4),
+    18px 18px 30px rgba(0, 0, 0, 0.7);
+}
+
+.iso-depth-cyan {
+  box-shadow: 
+    3px 3px 0px rgba(6, 182, 212, 0.6),
+    6px 6px 0px rgba(6, 182, 212, 0.3),
+    9px 9px 15px rgba(0, 0, 0, 0.6);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.iso-depth-cyan:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 
+    6px 6px 0px rgba(6, 182, 212, 0.8),
+    12px 12px 0px rgba(6, 182, 212, 0.4),
+    18px 18px 30px rgba(0, 0, 0, 0.7);
+}
+
+/* Glassmorphic 3D Panels */
 .glass {
-  background: rgba(22, 29, 48, 0.65);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -24,7 +123,7 @@
 }
 
 .glass-panel {
-  background: rgba(22, 29, 48, 0.4);
+  background: rgba(15, 23, 42, 0.3);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -108,8 +207,8 @@
 /* Cybernetic Grid Overlay */
 .cyber-grid {
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
@@ -123,10 +222,10 @@
 /* Pulse Glow Animation */
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
   }
   50% {
-    box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.35);
   }
 }
 
@@ -147,3 +246,4 @@
 .skeleton {
   animation: skeletonPulse 1.5s ease-in-out infinite;
 }
+

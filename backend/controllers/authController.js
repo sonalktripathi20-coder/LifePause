@@ -23,6 +23,9 @@ const formatUserProfile = (profile) => {
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
+// @desc    Register a new user
+// @route   POST /api/auth/register
+// @access  Public
 const registerUser = async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -49,32 +52,20 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Registration failed' });
     }
 
-    // 2. Fetch the newly created profile (created by DB triggers automatically)
-    // In case the DB trigger has a small latency, we retry or construct the response
-    let profile = null;
-    const { data: fetchedProfile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    profile = fetchedProfile;
-
-    if (!profile) {
-      // Manual fallback insertion if trigger hasn't finished yet (highly resilient)
-      const { data: newProfile, error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: user.id,
-          email: user.email,
-          full_name: name,
-          plan: 'Free'
-        })
-        .select('*')
-        .single();
-      
-      profile = newProfile;
-    }
+    // Construct profile in-memory for the registration response to bypass unauthenticated RLS read locks
+    const profile = {
+      id: user.id,
+      email: user.email,
+      full_name: name,
+      plan: 'Free',
+      family_members: [],
+      blood_group: '',
+      allergies: '',
+      medications: '',
+      doctor_contact: '',
+      preferred_hospital: '',
+      created_at: user.created_at || new Date().toISOString()
+    };
 
     // Generate response token (use Supabase access_token or fallback)
     const token = session?.access_token || 'dummy_token_awaiting_email_verification';
@@ -108,8 +99,9 @@ const loginUser = async (req, res) => {
 
     const { user, session } = data;
 
-    // 2. Fetch public user profile
-    const { data: profile, error: profileError } = await supabase
+    // 2. Fetch public user profile using the user-scoped client to satisfy RLS!
+    const userClient = getClientForUser(session.access_token);
+    const { data: profile, error: profileError } = await userClient
       .from('users')
       .select('*')
       .eq('id', user.id)
@@ -120,7 +112,6 @@ const loginUser = async (req, res) => {
     }
 
     // 3. Create login alert notification & write audit log (using user scoped client)
-    const userClient = getClientForUser(session.access_token);
     await userClient.from('notifications').insert({
       user_id: user.id,
       title: 'New Login Detected',

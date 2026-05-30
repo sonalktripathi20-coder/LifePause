@@ -1,13 +1,35 @@
-const Contact = require('../models/Contact');
-const Notification = require('../models/Notification');
+// Helper to format Supabase contact to expected frontend shape
+const formatContact = (c) => {
+  return {
+    _id: c.id,
+    id: c.id,
+    owner: c.user_id,
+    name: c.contact_name,
+    email: c.email,
+    phone: c.phone,
+    relationship: c.relationship,
+    permission: c.permission,
+    isVerified: c.is_verified,
+    createdAt: c.created_at
+  };
+};
 
 // @desc    Get contacts
 // @route   GET /api/contacts
 // @access  Private
 const getContacts = async (req, res) => {
   try {
-    const contacts = await Contact.find({ owner: req.user._id });
-    res.json({ success: true, count: contacts.length, data: contacts });
+    const { data: contacts, error } = await req.supabase
+      .from('contacts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    const formatted = contacts.map(formatContact);
+    res.json({ success: true, count: formatted.length, data: formatted });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -22,7 +44,14 @@ const createContact = async (req, res) => {
   try {
     // Check subscription plan limits (Free: 1 trusted contact)
     if (req.user.subscriptionPlan === 'Free') {
-      const count = await Contact.countDocuments({ owner: req.user._id });
+      const { count, error: countError } = await req.supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        return res.status(400).json({ success: false, message: countError.message });
+      }
+
       if (count >= 1) {
         return res.status(403).json({
           success: false,
@@ -31,25 +60,38 @@ const createContact = async (req, res) => {
       }
     }
 
-    const contact = await Contact.create({
-      owner: req.user._id,
-      name,
-      email,
-      phone,
-      relationship,
-      permission,
-      isVerified: false // Needs invitation verification
-    });
+    const { data: contact, error } = await req.supabase
+      .from('contacts')
+      .insert({
+        user_id: req.user.id,
+        contact_name: name,
+        email,
+        phone: phone || '',
+        relationship: relationship || '',
+        permission,
+        is_verified: false
+      })
+      .select('*')
+      .single();
 
-    // Create verification alert notification
-    await Notification.create({
-      owner: req.user._id,
+    if (error || !contact) {
+      return res.status(400).json({ success: false, message: error?.message || 'Failed to create contact' });
+    }
+
+    // Create verification alert notification & audit log
+    await req.supabase.from('notifications').insert({
+      user_id: req.user.id,
       title: 'Invitation Sent',
       message: `An invitation was sent to ${name} (${email}) to verify their emergency contact authorization.`,
       type: 'info'
     });
 
-    res.status(201).json({ success: true, data: contact });
+    await req.supabase.from('audit_logs').insert({
+      user_id: req.user.id,
+      action: `Created Contact ${name}`
+    });
+
+    res.status(201).json({ success: true, data: formatContact(contact) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -59,23 +101,27 @@ const createContact = async (req, res) => {
 // @route   PUT /api/contacts/:id
 // @access  Private
 const updateContact = async (req, res) => {
+  const { name, email, phone, relationship, permission } = req.body;
+
   try {
-    let contact = await Contact.findById(req.params.id);
+    const { data: contact, error } = await req.supabase
+      .from('contacts')
+      .update({
+        contact_name: name,
+        email,
+        phone,
+        relationship,
+        permission
+      })
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
 
-    if (!contact) {
-      return res.status(404).json({ success: false, message: 'Contact not found' });
+    if (error || !contact) {
+      return res.status(404).json({ success: false, message: 'Contact not found or unauthorized' });
     }
 
-    if (contact.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    contact = await Contact.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-
-    res.json({ success: true, data: contact });
+    res.json({ success: true, data: formatContact(contact) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -86,17 +132,14 @@ const updateContact = async (req, res) => {
 // @access  Private
 const deleteContact = async (req, res) => {
   try {
-    const contact = await Contact.findById(req.params.id);
+    const { data, error } = await req.supabase
+      .from('contacts')
+      .delete()
+      .eq('id', req.params.id);
 
-    if (!contact) {
-      return res.status(404).json({ success: false, message: 'Contact not found' });
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
     }
-
-    if (contact.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    await contact.deleteOne();
 
     res.json({ success: true, message: 'Contact removed' });
   } catch (error) {
@@ -109,28 +152,33 @@ const deleteContact = async (req, res) => {
 // @access  Private
 const verifyContact = async (req, res) => {
   try {
-    const contact = await Contact.findById(req.params.id);
+    const { data: contact, error } = await req.supabase
+      .from('contacts')
+      .update({
+        is_verified: true
+      })
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
 
-    if (!contact) {
-      return res.status(404).json({ success: false, message: 'Contact not found' });
+    if (error || !contact) {
+      return res.status(404).json({ success: false, message: 'Contact not found or unauthorized' });
     }
-
-    if (contact.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    contact.isVerified = true;
-    await contact.save();
 
     // Create verified alert notification
-    await Notification.create({
-      owner: req.user._id,
+    await req.supabase.from('notifications').insert({
+      user_id: req.user.id,
       title: 'Emergency Contact Verified',
-      message: `${contact.name} has successfully verified their contact details and access rights.`,
+      message: `${contact.contact_name} has successfully verified their contact details and access rights.`,
       type: 'security'
     });
 
-    res.json({ success: true, data: contact });
+    await req.supabase.from('audit_logs').insert({
+      user_id: req.user.id,
+      action: `Verified Contact ${contact.contact_name}`
+    });
+
+    res.json({ success: true, data: formatContact(contact) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

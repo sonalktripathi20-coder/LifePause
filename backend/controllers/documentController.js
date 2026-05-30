@@ -1,13 +1,35 @@
-const Document = require('../models/Document');
-const Notification = require('../models/Notification');
+// Helper to format Supabase document to expected frontend shape
+const formatDocument = (d) => {
+  return {
+    _id: d.id,
+    id: d.id,
+    owner: d.user_id,
+    title: d.title,
+    category: d.category,
+    fileName: d.file_name,
+    fileUrl: d.file_url,
+    expiryDate: d.expiry_date,
+    notes: d.notes,
+    createdAt: d.created_at
+  };
+};
 
 // @desc    Get all documents
 // @route   GET /api/documents
 // @access  Private
 const getDocuments = async (req, res) => {
   try {
-    const docs = await Document.find({ owner: req.user._id });
-    res.json({ success: true, count: docs.length, data: docs });
+    const { data: docs, error } = await req.supabase
+      .from('documents')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    const formatted = docs.map(formatDocument);
+    res.json({ success: true, count: formatted.length, data: formatted });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -22,7 +44,14 @@ const createDocument = async (req, res) => {
   try {
     // Check subscription plan limits (Free: 2 documents)
     if (req.user.subscriptionPlan === 'Free') {
-      const count = await Document.countDocuments({ owner: req.user._id });
+      const { count, error: countError } = await req.supabase
+        .from('documents')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        return res.status(400).json({ success: false, message: countError.message });
+      }
+
       if (count >= 2) {
         return res.status(403).json({
           success: false,
@@ -31,27 +60,40 @@ const createDocument = async (req, res) => {
       }
     }
 
-    const doc = await Document.create({
-      owner: req.user._id,
-      title,
-      category,
-      fileName,
-      expiryDate,
-      notes,
-      fileUrl: `/uploads/${fileName}` // Simulated path
-    });
+    const { data: doc, error } = await req.supabase
+      .from('documents')
+      .insert({
+        user_id: req.user.id,
+        title,
+        category,
+        file_name: fileName,
+        file_url: `/uploads/${fileName}`, // Simulated path
+        expiry_date: expiryDate || null,
+        notes: notes || ''
+      })
+      .select('*')
+      .single();
 
-    // Create notifications for expiration alert if expiryDate is set
+    if (error || !doc) {
+      return res.status(400).json({ success: false, message: error?.message || 'Failed to create document' });
+    }
+
+    // Create notifications for expiration alert if expiryDate is set & audit log
     if (expiryDate) {
-      await Notification.create({
-        owner: req.user._id,
+      await req.supabase.from('notifications').insert({
+        user_id: req.user.id,
         title: 'Document Expiry Registered',
         message: `We will notify you before your document "${title}" expires on ${new Date(expiryDate).toLocaleDateString()}`,
         type: 'expiry'
       });
     }
 
-    res.status(201).json({ success: true, data: doc });
+    await req.supabase.from('audit_logs').insert({
+      user_id: req.user.id,
+      action: `Created Document ${title}`
+    });
+
+    res.status(201).json({ success: true, data: formatDocument(doc) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -61,23 +103,27 @@ const createDocument = async (req, res) => {
 // @route   PUT /api/documents/:id
 // @access  Private
 const updateDocument = async (req, res) => {
+  const { title, category, fileName, expiryDate, notes } = req.body;
+
   try {
-    let doc = await Document.findById(req.params.id);
+    const { data: doc, error } = await req.supabase
+      .from('documents')
+      .update({
+        title,
+        category,
+        file_name: fileName,
+        expiry_date: expiryDate || null,
+        notes: notes || ''
+      })
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
 
-    if (!doc) {
-      return res.status(404).json({ success: false, message: 'Document not found' });
+    if (error || !doc) {
+      return res.status(404).json({ success: false, message: 'Document not found or unauthorized' });
     }
 
-    if (doc.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    doc = await Document.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-
-    res.json({ success: true, data: doc });
+    res.json({ success: true, data: formatDocument(doc) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -88,17 +134,14 @@ const updateDocument = async (req, res) => {
 // @access  Private
 const deleteDocument = async (req, res) => {
   try {
-    const doc = await Document.findById(req.params.id);
+    const { data, error } = await req.supabase
+      .from('documents')
+      .delete()
+      .eq('id', req.params.id);
 
-    if (!doc) {
-      return res.status(404).json({ success: false, message: 'Document not found' });
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
     }
-
-    if (doc.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    await doc.deleteOne();
 
     res.json({ success: true, message: 'Document removed' });
   } catch (error) {

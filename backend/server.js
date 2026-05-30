@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const connectDB = require('./config/db');
 
 // Route files
 const authRoutes = require('./routes/authRoutes');
@@ -15,43 +14,45 @@ const notificationRoutes = require('./routes/notificationRoutes');
 // Load environment variables
 dotenv.config();
 
-// Connect to Database
-connectDB();
+const app = reportAppInit();
 
-const app = express();
+function reportAppInit() {
+  const expressApp = express();
+  
+  // Middleware
+  expressApp.use(cors());
+  expressApp.use(express.json());
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+  // Mount routers
+  expressApp.use('/api/auth', authRoutes);
+  expressApp.use('/api/vault', vaultRoutes);
+  expressApp.use('/api/documents', documentRoutes);
+  expressApp.use('/api/contacts', contactRoutes);
+  expressApp.use('/api/reminders', reminderRoutes);
+  expressApp.use('/api/emergency', emergencyRoutes);
+  expressApp.use('/api/notifications', notificationRoutes);
 
-// Mount routers
-app.use('/api/auth', authRoutes);
-app.use('/api/vault', vaultRoutes);
-app.use('/api/documents', documentRoutes);
-app.use('/api/contacts', contactRoutes);
-app.use('/api/reminders', reminderRoutes);
-app.use('/api/emergency', emergencyRoutes);
-app.use('/api/notifications', notificationRoutes);
-
-// Simple diagnostic route
-app.get('/', (req, res) => {
-  const mongoose = require('mongoose');
-  const dbState = mongoose.connection.readyState;
-  res.json({
-    message: 'Welcome to the LifePause API.',
-    status: dbState === 1 ? 'online' : 'database_offline',
-    timestamp: new Date()
+  // Simple diagnostic route
+  expressApp.get('/', (req, res) => {
+    const supabaseConfigured = !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
+    res.json({
+      message: 'Welcome to the LifePause Supabase API.',
+      status: supabaseConfigured ? 'online' : 'database_configuration_missing',
+      timestamp: new Date()
+    });
   });
-});
 
-// Error handling middleware (catch-all)
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: err.message || 'Server Error'
+  // Error handling middleware (catch-all)
+  expressApp.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Server Error'
+    });
   });
-});
+
+  return expressApp;
+}
 
 const PORT = process.env.PORT || 5000;
 
@@ -60,5 +61,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
-

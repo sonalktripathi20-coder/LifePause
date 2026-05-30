@@ -1,12 +1,33 @@
-const Notification = require('../models/Notification');
+// Helper to format Supabase notification to expected frontend shape
+const formatNotification = (n) => {
+  return {
+    _id: n.id,
+    id: n.id,
+    owner: n.user_id,
+    title: n.title,
+    message: n.message,
+    type: n.type,
+    isRead: n.is_read,
+    createdAt: n.created_at
+  };
+};
 
 // @desc    Get all notifications
 // @route   GET /api/notifications
 // @access  Private
 const getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ owner: req.user._id }).sort({ createdAt: -1 });
-    res.json({ success: true, count: notifications.length, data: notifications });
+    const { data: notifications, error } = await req.supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    const formatted = notifications.map(formatNotification);
+    res.json({ success: true, count: formatted.length, data: formatted });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -17,20 +38,20 @@ const getNotifications = async (req, res) => {
 // @access  Private
 const markAsRead = async (req, res) => {
   try {
-    const notification = await Notification.findById(req.params.id);
+    const { data: notification, error } = await req.supabase
+      .from('notifications')
+      .update({
+        is_read: true
+      })
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
 
-    if (!notification) {
-      return res.status(404).json({ success: false, message: 'Notification not found' });
+    if (error || !notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found or unauthorized' });
     }
 
-    if (notification.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    notification.isRead = true;
-    await notification.save();
-
-    res.json({ success: true, data: notification });
+    res.json({ success: true, data: formatNotification(notification) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -41,10 +62,15 @@ const markAsRead = async (req, res) => {
 // @access  Private
 const markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany(
-      { owner: req.user._id, isRead: false },
-      { isRead: true }
-    );
+    const { data, error } = await req.supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('is_read', false);
+
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -56,17 +82,14 @@ const markAllAsRead = async (req, res) => {
 // @access  Private
 const clearNotification = async (req, res) => {
   try {
-    const notification = await Notification.findById(req.params.id);
+    const { data, error } = await req.supabase
+      .from('notifications')
+      .delete()
+      .eq('id', req.params.id);
 
-    if (!notification) {
-      return res.status(404).json({ success: false, message: 'Notification not found' });
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
     }
-
-    if (notification.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
-    }
-
-    await notification.deleteOne();
 
     res.json({ success: true, message: 'Notification cleared' });
   } catch (error) {
